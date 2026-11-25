@@ -1,8 +1,9 @@
-# AWD – Microservices : Eureka + Observabilité (Spring Boot Actuator)
+# AWD – Microservices : Eureka + Observabilité (Spring Boot Actuator) + API Gateway
 
 Projet réalisé dans le cadre du module **Architecture Web Distribuée** (2026-2027) :
 - **Atelier 1** : Implémentation d'un serveur de découverte **Eureka**
 - **Atelier 2** : Observabilité avec **Spring Boot Actuator**
+- **Atelier 3** : Mise en place d'une **API Gateway** avec **Spring Cloud Gateway**
 
 ## 👥 Équipe
 
@@ -23,6 +24,7 @@ au lieu d'une adresse écrite en dur.
 | Microservice | Technologie | Port | Nom dans Eureka | Endpoints de santé |
 |---|---|---|---|---|
 | eureka-server | Spring Boot 3.5 + Spring Cloud 2025.0 | 8761 | – | dashboard |
+| api-gateway | Spring Boot 3.5 + Spring Cloud Gateway 2025.0 | **8888** | GATEWAY | `/actuator/gateway/routes`, `/actuator/health` |
 | candidat | Spring Boot 3.2 + H2 | 8081 | CANDIDAT | `/actuator/health`, `/actuator/info`, `/actuator/metrics`, `/actuator/loggers` |
 | job | Spring Boot 3.2 + MySQL | 8082 | JOB | idem (+ composant `db` MySQL) |
 | candidature | Spring Boot 4.0 | 8085 | CANDIDATURE | idem |
@@ -35,6 +37,7 @@ backend/
 ├── docs/                       captures d'écran
 └── microservices/
     ├── eureka-server/          serveur de découverte (port 8761)
+    ├── api-gateway/            point d'entrée unique (port 8888)
     ├── candidat/               Spring Boot + H2
     ├── job/                    Spring Boot + MySQL
     ├── canditature/            Spring Boot
@@ -58,7 +61,7 @@ backend/
 
 ## 🚀 Démarrage
 
-**Ordre de démarrage** : MySQL → Eureka → Candidat, Candidature, Job → Meeting → Notification
+**Ordre de démarrage** : MySQL → Eureka → Candidat, Candidature, Job → Meeting → Notification → **API Gateway**
 
 1. **MySQL** : démarrer MySQL dans XAMPP, puis importer `microservices/job/database/job_db.sql` dans phpMyAdmin.
 2. **Eureka** : lancer `EurekaApplication` → http://localhost:8761
@@ -79,6 +82,64 @@ backend/
    python -m app.main                       # instance 1 (port 8084)
    $env:PORT=8094; python -m app.main       # instance 2 (port 8094), dans un 2e terminal (venv activé)
    ```
+
+6. **API Gateway** : lancer `GatewayApplication` avec un profil (voir Atelier 3) → http://localhost:8888
+
+---
+
+## 🚪 Atelier 3 – API Gateway (Spring Cloud Gateway)
+
+Détails complets et réponses aux questions : [`microservices/api-gateway/README.md`](microservices/api-gateway/README.md)
+
+Le client appelle uniquement `http://localhost:8888`, la Gateway transfère vers le bon microservice :
+
+| Chemin sur la Gateway | Microservice | Statique | Dynamique (Eureka) |
+|---|---|---|---|
+| `/mic1/**` | candidat | `http://localhost:8081` | `lb://candidat` |
+| `/api/jobs/**`, `/api/categories/**` | job | `http://localhost:8082` | `lb://job` |
+| `/api/meetings/**` | meeting | `http://localhost:8083` | `lb://meeting` |
+| `/api/notifications/**` | notification | `http://localhost:8084` | `lb://notification` |
+| `/mic3/**` | candidature | `http://localhost:8085` | `lb://candidature` |
+
+Les 4 méthodes sont dans le projet, sélectionnées par profil Spring :
+
+| Profil | Méthode |
+|---|---|
+| `static-java` | Partie 2 – routes statiques dans la classe Java |
+| `static-props` | Partie 2 – routes statiques dans `application.properties` |
+| `dynamic-java` | Partie 3 – routes dynamiques `lb://` dans la classe Java |
+| `dynamic-props` | Partie 3 – routes dynamiques `lb://` dans `application.properties` |
+| `dynamic-java,random-lb` | Partie 3 – Q3 : algorithme Random pour candidat uniquement |
+
+### Partie 2 – Configuration statique
+
+![Routes statiques](docs/gateway-static-routes.png)
+![Candidat via Gateway (statique)](docs/gateway-static-candidat.png)
+![Job via Gateway (statique)](docs/gateway-static-job.png)
+
+### Partie 3 – Configuration dynamique avec Eureka
+
+![Eureka avec GATEWAY](docs/gateway-eureka-dashboard.png)
+![Routes dynamiques lb://](docs/gateway-dynamic-routes.png)
+![Services via Gateway (dynamique)](docs/gateway-dynamic-services.png)
+
+### Q2.b – Algorithme de load balancing
+
+Avec 2 instances de candidat (8081 et 8091), les logs de la Gateway (`LoadBalancerClientFilter url chosen`)
+alternent 8081 → 8091 → 8081 → 8091 : c'est le **Round Robin** (`RoundRobinLoadBalancer`, algorithme par défaut
+de Spring Cloud LoadBalancer).
+
+![Logs Round Robin](docs/gateway-round-robin-logs.png)
+
+### Q3 – Algorithme Random pour candidat uniquement
+
+Autres algorithmes : Random, Weighted, Least Connections, Least Response Time, IP Hash, Sticky Session, Zone preference,
+Health-check. Spring Cloud LoadBalancer fournit `RoundRobinLoadBalancer` et `RandomLoadBalancer`.
+
+`@LoadBalancerClient(name = "candidat", configuration = CandidatRandomLoadBalancerConfig.class)` applique un
+`RandomLoadBalancer` au seul service candidat ; les autres restent en Round Robin. L'ordre des instances devient irrégulier :
+
+![Logs Random](docs/gateway-random-logs.png)
 
 ---
 
@@ -310,7 +371,7 @@ Vérification dans le registre `GET http://localhost:8761/eureka/apps/NOTIFICATI
 |---|---|---|
 | meeting | `npm test` | 7 tests réussis |
 | notification | `pytest` | 7 tests réussis |
-| eureka-server, candidat, job, candidature | `mvn test` | Eureka désactivé pendant les tests |
+| eureka-server, candidat, job, candidature, api-gateway | `mvn test` | Eureka désactivé pendant les tests |
 
 ---
 
@@ -321,3 +382,5 @@ Vérification dans le registre `GET http://localhost:8761/eureka/apps/NOTIFICATI
 - **Actuator** sait **si chaque service va bien** : santé détaillée, informations, métriques et niveau des logs.
 - Reliés ensemble (`eureka.client.healthcheck.enabled=true`), une instance en panne passe automatiquement **DOWN**
   dans Eureka et n'est plus proposée aux autres services.
+- **L'API Gateway** offre **un seul point d'entrée** (port 8888) : en mode dynamique (`lb://`), elle trouve les
+  services dans Eureka et répartit la charge entre leurs instances (Round Robin par défaut, Random configurable).
