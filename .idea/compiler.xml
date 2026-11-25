@@ -8,6 +8,7 @@
         <outputRelativeToContentRoot value="true" />
         <module name="candidat" />
         <module name="job" />
+        <module name="GetWay" />
         <module name="eureka-server" />
         <module name="canditature" />
       </profile>
@@ -15,6 +16,7 @@
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="GetWay" options="-parameters" />
       <module name="candidat" options="-parameters" />
       <module name="canditature" options="-parameters" />
       <module name="eureka-server" options="-parameters" />

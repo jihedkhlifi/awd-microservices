@@ -11,6 +11,8 @@
         <option value="$PROJECT_DIR$/backend/microservices/candidat/pom.xml" />
         <option value="$PROJECT_DIR$/backend/microservices/canditature/pom.xml" />
         <option value="$PROJECT_DIR$/backend/microservices/eureka-server/pom.xml" />
+        <option value="$PROJECT_DIR$/GetWay/pom.xml" />
+        <option value="$PROJECT_DIR$/backend/GetWay/pom.xml" />
       </list>
     </option>
   </component>
